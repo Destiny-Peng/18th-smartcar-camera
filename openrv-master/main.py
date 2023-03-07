@@ -657,9 +657,10 @@ def getPerspectMat(ls ,tar_ls):
     #check if the pre_trans inversible
     det,x = det_inv(pre_trans)
     if det < flt_eps or det > 1.19E7:
-        return None
+        y = inverse_matrix(pre_trans*10)*10
+    else:
+        y = inverse_matrix(pre_trans)
     aft_trans = matrix(aft_trans).reshape([8,1])
-    y=inverse_matrix(pre_trans)
     tep = dot(y,aft_trans)
     for i in range(8):
         H.append([tep[i]])
