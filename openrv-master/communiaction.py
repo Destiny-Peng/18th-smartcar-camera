@@ -132,6 +132,7 @@ tep = ulinalg.dot(H,point.T)
 tep[0,:] = tep[0,:]*5
 tep[1,:] = 500-tep[1,:]*5
 tep = tep//20+1
-print(tep)
+x=tep[0:2,:]
+
 
 

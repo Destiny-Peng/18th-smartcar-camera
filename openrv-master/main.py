@@ -687,15 +687,11 @@ def map_recog(img,tar_ls):
                     pre_point.append([c[0], c[1], 1])
             pre_point = matrix(pre_point)
             aft_point = pre_point
-
             aft_point = dot(H,pre_point.T)
-            x,y = aft_point.shape
-            if y > 11:
-                for i in range(y):
-                    aft_point[0,i]=aft_point[0,i]/aft_point[2,i]
-                    aft_point[1,i]=aft_point[1,i]/aft_point[2,i]
-                print(aft_point[0,0])
-                return aft_point
+            aft_point[0, :] = aft_point[0, :] * 5
+            aft_point[1, :] = 500 - aft_point[1, :] * 5
+            aft_point = aft_point // 20 + 1
+            return aft_point[0:2,:]
 
 def recognize():
     print("recognize")
@@ -711,14 +707,14 @@ def Send_end(uart):
     uart.write("END\r\n")
 def Send_float(uart,bytes):
     uart.write(struct.pack("<f",bytes))
-def Send_tuple(uart,tup):
-    x,y=tup
-    x = float(x)
-    y = float(y)
-    uart.write("tup\r\n")
-    Send_float(uart,x)
-    Send_float(uart,y)
 #要在主循环中轮询。
+def Send_loc(uart,point_ls:matrix):
+    Send_start(uart)
+    for i in range(point_ls.n):
+        Send_float(uart,float(point_ls[0,i]))
+        Send_float(uart,float(point_ls[1,i]))
+    Send_end(uart)
+
 def Read_line(uart,flag):
     tep = uart.readline().decode().strip().split(",")
     if tep != [""] :
