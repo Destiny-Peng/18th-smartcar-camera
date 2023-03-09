@@ -709,7 +709,7 @@ def Send_start(uart):
 def Send_end(uart):
     uart.write("END\r\n")
 def Send_float(uart,bytes):
-    uart.write(struct.pack("<f",bytes))
+    uart.write(struct.pack(">f",bytes))
 def Send_tuple(uart,tup):
     x,y=tup
     x = float(x)
