@@ -693,7 +693,7 @@ def map_recog(img,tar_ls):
             aft_point = aft_point // 20 + 1
             return aft_point[0:2,:]
 
-def recognize():
+def recognize(i):
     '''
     point = map_recog(img,tar)
     if len(point)>10:
@@ -702,7 +702,14 @@ def recognize():
     test = matrix([[6.0 , 20.0, 24.0, 8.0 , 33.0, 5.0 , 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0 , 18.0, 14.0, 3.0 , 25.0],
      [22.0, 20.0, 13.0, 9.0 , 9.0 , 6.0 , 5.0 , 4.0 , 4.0 , 22.0, 17.0, 17.0, 17.0, 14.0, 13.0, 10.0, 10.0, 9.0 ]])
     print("recognize")
-    Send_loc(uart,test)
+    print(i)
+    if i < 2*test.n:
+        Send_float(uart,test[i%2,i//2])
+        return i+1
+    else:
+        return 0
+    #print(test.n)
+    #Send_loc(uart,test)
     pass
 #-----------------------------------------------#
 #-----------------------------------------------#
@@ -743,11 +750,12 @@ sensor.set_pixformat(sensor.GRAYSCALE)
 sensor.set_framesize(sensor.QVGA)
 sensor.skip_frames(time = 2000)
 flag = 0
+times = 0
 while(True):
     tep,flag = Read_line(uart,flag)
     if flag == 1:
         print(tep)
-        recognize()
+        times = recognize(times)
         flag = 0
     elif flag == 2:
         print(tep)
