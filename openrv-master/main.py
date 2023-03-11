@@ -3,6 +3,7 @@ from pyb import LED
 uart = UART(2, baudrate=115200)     # 初始化串口 波特率设置为115200 TX是B12 RX是B13
 import sensor, image, time
 import math
+DEBUG = 1
 #--------------------umatrix---------------------------#
 import sys
 
@@ -694,20 +695,17 @@ def map_recog(img,tar_ls):
             return aft_point[0:2,:]
 
 def recognize(i):
-    '''
-    point = map_recog(img,tar)
-    if len(point)>10:
-        Send_loc(uart,test)
-    '''
-    test = matrix([[6.0 , 20.0, 24.0, 8.0 , 33.0, 5.0 , 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0 , 18.0, 14.0, 3.0 , 25.0],
+    tep = []
+    if DEBUG:
+        img = sensor.snapshot()
+        point = map_recog(img,tar)
+        if type(point) == matrix:
+            tep = point
+
+    tep = matrix([[6.0 , 20.0, 24.0, 8.0 , 33.0, 5.0 , 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0 , 18.0, 14.0, 3.0 , 25.0],
      [22.0, 20.0, 13.0, 9.0 , 9.0 , 6.0 , 5.0 , 4.0 , 4.0 , 22.0, 17.0, 17.0, 17.0, 14.0, 13.0, 10.0, 10.0, 9.0 ]])
     print("recognize")
-    print(i)
-    if i < 2*test.n:
-        Send_float(uart,test[i%2,i//2])
-        return i+1
-    else:
-        return 0
+    return Send_loc(uart,tep,i)
     #print(test.n)
     #Send_loc(uart,test)
     pass
@@ -723,12 +721,13 @@ def Send_end(uart):
 def Send_float(uart,bytes):
     uart.write(struct.pack("<f",bytes))
 #要在主循环中轮询。
-def Send_loc(uart,point_ls:matrix):
-    Send_start(uart)
-    for i in range(point_ls.n):
-        Send_float(uart,float(point_ls[0,i]))
-        Send_float(uart,float(point_ls[1,i]))
-    Send_end(uart)
+def Send_loc(uart,point_ls:matrix,i):
+    if i < 2 * point_ls.n:
+        Send_float(uart, point_ls[i % 2, i // 2])
+        return i + 1
+    else:
+        Send_float(uart,100.0)
+        return 0
 
 def Read_line(uart,flag):
     tep = uart.readline().decode().strip().split(",")
