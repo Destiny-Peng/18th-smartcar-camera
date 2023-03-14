@@ -679,7 +679,7 @@ def map_recog(img,tar_ls):
                 rect_coord.append([p[0], p[1]])
             rect_coord = matrix(rect_coord)
             H = getPerspectMat(rect_coord, tar_ls)
-            if H == None:
+            if type(H) != matrix:
                 continue
             for c in img.find_circles(roi=r.rect(), threshold=1500, x_margin=10, y_margin=10,
                                       r_margin=10, r_min=2,
