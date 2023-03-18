@@ -672,10 +672,18 @@ def map_recog(img,tar_ls):
     #灰度图
     pre_point=[]
     rect_coord=[]
-    for r in img.find_rects(threshold=10000):
-        w_h = r.w()/r.h()
-        if r.w() >= 200 and w_h >1.3 and w_h <1.45:
-            for p in r.corners():
+    for r in img.find_rects(threshold=8000):
+        #r是一个矩形对象，直接获得的w和h是bbox的属性，并不是矩形的,corners左下起逆时针
+        corners = list(r.corners())
+        x1,y1 = corners[0]
+        x2,y2 = corners[1]
+        len_x = math.sqrt((x1-x2)**2 + (y1-y2)**2)
+        x1,y1 = corners[2]
+        len_y = math.sqrt((x1-x2)**2 + (y1-y2)**2)
+        w_h = len_x/len_y
+        bbox_size = r.w()*r.h()
+        if w_h >1.35 and w_h <1.45 and bbox_size > 10000:
+            for p in corners:
                 rect_coord.append([p[0], p[1]])
             rect_coord = matrix(rect_coord)
             H = getPerspectMat(rect_coord, tar_ls)
@@ -684,7 +692,7 @@ def map_recog(img,tar_ls):
             for c in img.find_circles(roi=r.rect(), threshold=1500, x_margin=10, y_margin=10,
                                       r_margin=10, r_min=2,
                                       r_max=6, r_step=1):
-                if abs(c.y()-r.y())>5:
+                if c.y()-r.y() > 5 and c.y()-r.y()-r.h() < -5:
                     pre_point.append([c[0], c[1], 1])
             pre_point = matrix(pre_point)
             aft_point = pre_point
