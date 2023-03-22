@@ -697,10 +697,11 @@ def map_recog(img,tar_ls):
             pre_point = matrix(pre_point)
             aft_point = pre_point
             aft_point = dot(H,pre_point.T)
-            aft_point[0, :] = aft_point[0, :] * 5
-            aft_point[1, :] = 500 - aft_point[1, :] * 5
+            for i in range(aft_point.n):
+                aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
+                aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
             aft_point = aft_point // 20 + 1
-            return aft_point[0:2,:]
+            return aft_point[0:2, :]
 
 def recognize(i):
     tep = []
