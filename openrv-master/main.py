@@ -782,7 +782,7 @@ def Read_line(uart,flag):
         elif tep == ["T"]:
             #发送坐标点
             flag = 3
-        elif tep == ["T"]:
+        elif tep == ["S"]:
             #发送图片识别结果
             flag = 4
     return tep,flag
