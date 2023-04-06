@@ -807,7 +807,7 @@ while(True):
         flag = 0
     elif flag == 2:
         print(tep)
-        classify()
+        cls = classify()
         flag = 0
     elif flag == 3:
         print(tep)
