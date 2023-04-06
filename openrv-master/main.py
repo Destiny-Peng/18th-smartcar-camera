@@ -700,7 +700,7 @@ def map_recog(img,tar_ls):
         aft_point = aft_point // 20 + 1
         return aft_point[0:2, :]
 
-def recognize(i):
+def recognize():
     tep = []
     if DEBUG:
         img = sensor.snapshot()
@@ -711,17 +711,14 @@ def recognize(i):
     tep = matrix([[6.0 , 20.0, 24.0, 8.0 , 33.0, 5.0 , 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0 , 18.0, 14.0, 3.0 , 25.0],
      [22.0, 20.0, 13.0, 9.0 , 9.0 , 6.0 , 5.0 , 4.0 , 4.0 , 22.0, 17.0, 17.0, 17.0, 14.0, 13.0, 10.0, 10.0, 9.0 ]])
     print("recognize")
-    return Send_loc(uart,tep,i)
-    #print(test.n)
-    #Send_loc(uart,test)
-    pass
+    return tep
 #-----------------------------------------------#
 #-----------------------------------------------#
 #图像分类模块
 def classify():
     sensor.reset()
     sensor.set_pixformat(sensor.RGB565)
-    sensor.set_framesize(sensor.QQVGA)  # we run out of memory if the resolution is much bigger...
+    sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
     sensor.set_brightness(2000)
     sensor.skip_frames(time=20)
     sensor.set_auto_gain(False)  # must turn this off to prevent image washout...
@@ -729,34 +726,30 @@ def classify():
     net_path = "mymodel.tflite"  # 定义模型的路径
     labels = [line.rstrip() for line in open("/sd/labels_animal_fruits.txt")]  # 加载标签
     net = tf.load(net_path, load_to_fb=True)  # 加载模型
-    #(0, 100, -128, 127, -128, 0)蓝色
-    # 这个示例演示如何加载tflite模型并运行
-    # 这个示例演示如何加载tflite模型并运行
-    # 这个示例演示如何加载tflite模型并运行
+    img = sensor.snapshot().binary([(0, 100, -128, 127, -128, 0)])  # (0, 100, -128, 127, -128, 0)蓝色
+    flag, r = Find_rec(img, 0.95, 1.05, 3600)
+    if flag:
+        img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
+        img1 = sensor.snapshot().copy(1, 1, r.rect())  # 拷贝矩形框内的图像
+        # 将矩形框内的图像使用训练好的模型进行分类
+        # tf.classify()将在图像的roi上运行网络(如果没有指定roi，则在整个图像上运行)
+        # 将为每个位置生成一个分类得分输出向量。
+        # 在每个比例下，检测窗口都以x_overlap（0-1）和y_overlap（0-1）为指导在ROI中移动。
+        # 如果将重叠设置为0.5，那么每个检测窗口将与前一个窗口重叠50%。
+        # 请注意，重叠越多，计算工作量就越大。因为每搜索/滑动一次都会运行一下模型。
+        # 最后，对于在网络沿x/y方向滑动后的多尺度匹配，检测窗口将由scale_mul（0-1）缩小到min_scale（0-1）。
+        # 下降到min_scale(0-1)。例如，如果scale_mul为0.5，则检测窗口将缩小50%。
+        # 请注意，如果x_overlap和y_overlap较小，则在较小的比例下可以搜索更多区域...
 
-    while (True):
-        img = sensor.snapshot().binary([(0, 100, -128, 127, -128, 0)])
-        flag,r = Find_rec(img,0.95,1.05,3600)
-        if flag :
-            img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
-            img1 = sensor.snapshot().copy(1, 1, r.rect())  # 拷贝矩形框内的图像
-                # 将矩形框内的图像使用训练好的模型进行分类
-                # tf.classify()将在图像的roi上运行网络(如果没有指定roi，则在整个图像上运行)
-                # 将为每个位置生成一个分类得分输出向量。
-                # 在每个比例下，检测窗口都以x_overlap（0-1）和y_overlap（0-1）为指导在ROI中移动。
-                # 如果将重叠设置为0.5，那么每个检测窗口将与前一个窗口重叠50%。
-                # 请注意，重叠越多，计算工作量就越大。因为每搜索/滑动一次都会运行一下模型。
-                # 最后，对于在网络沿x/y方向滑动后的多尺度匹配，检测窗口将由scale_mul（0-1）缩小到min_scale（0-1）。
-                # 下降到min_scale(0-1)。例如，如果scale_mul为0.5，则检测窗口将缩小50%。
-                # 请注意，如果x_overlap和y_overlap较小，则在较小的比例下可以搜索更多区域...
+        # 默认设置只是进行一次检测...更改它们以搜索图像...
+        for obj in tf.classify(net, img1):
+            print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
+            sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
+            # 打印准确率最高的结果
+            for i in range(1):
+                print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
+                return labels.index(sorted_list[i][0])
 
-                # 默认设置只是进行一次检测...更改它们以搜索图像...
-            for obj in tf.classify(net, img1):
-                print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
-                sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
-                # 打印准确率最高的结果
-                for i in range(1):
-                    print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
 #-----------------------------------------------#
 #-----------------------------------------------#
 #通信模块
@@ -786,6 +779,12 @@ def Read_line(uart,flag):
         elif tep == ["C"]:
             #图片分类
             flag = 2
+        elif tep == ["T"]:
+            #发送坐标点
+            flag = 3
+        elif tep == ["T"]:
+            #发送图片识别结果
+            flag = 4
     return tep,flag
 
 
@@ -798,15 +797,27 @@ sensor.set_framesize(sensor.QVGA)
 sensor.skip_frames(time = 2000)
 flag = 0
 times = 0
+point = []
+cls = -1
 while(True):
     tep,flag = Read_line(uart,flag)
     if flag == 1:
         print(tep)
-        times = recognize(times)
+        recognize()
         flag = 0
     elif flag == 2:
         print(tep)
         classify()
         flag = 0
+    elif flag == 3:
+        print(tep)
+        times = Send_loc(uart,point,times)
+        flag = 0
+    elif flag == 4:
+        print(tep)
+        Send_float(uart,cls)
+        flag = 0
+
+
 
 
