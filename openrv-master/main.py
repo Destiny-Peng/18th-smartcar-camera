@@ -631,6 +631,24 @@ def eps(x = 0):
 #-----------------------------------------------#
 
 #-----------------------------------------------#
+#找特定长宽比和大小的矩形
+def Find_rec(img,w_h_min,w_h_max,size_min,size_max=640*480):
+    for r in img.find_rects(threshold=8000):
+        #r是一个矩形对象，直接获得的w和h是bbox的属性，并不是矩形的,corners左下起逆时针
+        corners = list(r.corners())
+        x1,y1 = corners[0]
+        x2,y2 = corners[1]
+        len_x = math.sqrt((x1-x2)**2 + (y1-y2)**2)
+        x1,y1 = corners[2]
+        len_y = math.sqrt((x1-x2)**2 + (y1-y2)**2)
+        if len_y < 0.01:
+            continue
+        w_h = len_x/len_y
+        bbox_size = r.w()*r.h()
+        if w_h >w_h_min and w_h <w_h_max and bbox_size > size_min and bbox_size < size_max:
+            return 1,r
+    return 0,None
+
 #A4识别模块
 tar=matrix([[0,0],[140,0],[140,100],[0,100]])
 def getPerspectMat(ls ,tar_ls):
@@ -660,36 +678,27 @@ def map_recog(img,tar_ls):
     #灰度图
     pre_point=[]
     rect_coord=[]
-    for r in img.find_rects(threshold=8000):
-        #r是一个矩形对象，直接获得的w和h是bbox的属性，并不是矩形的,corners左下起逆时针
-        corners = list(r.corners())
-        x1,y1 = corners[0]
-        x2,y2 = corners[1]
-        len_x = math.sqrt((x1-x2)**2 + (y1-y2)**2)
-        x1,y1 = corners[2]
-        len_y = math.sqrt((x1-x2)**2 + (y1-y2)**2)
-        w_h = len_x/len_y
-        bbox_size = r.w()*r.h()
-        if w_h >1.35 and w_h <1.45 and bbox_size > 10000:
-            for p in corners:
-                rect_coord.append([p[0], p[1]])
-            rect_coord = matrix(rect_coord)
-            H = getPerspectMat(rect_coord, tar_ls)
-            if type(H) != matrix:
-                continue
-            for c in img.find_circles(roi=r.rect(), threshold=1500, x_margin=10, y_margin=10,
-                                      r_margin=10, r_min=2,
-                                      r_max=6, r_step=1):
-                if c.y()-r.y() > 5 and c.y()-r.y()-r.h() < -5:
-                    pre_point.append([c[0], c[1], 1])
-            pre_point = matrix(pre_point)
-            aft_point = pre_point
-            aft_point = dot(H,pre_point.T)
-            for i in range(aft_point.n):
-                aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
-                aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
-            aft_point = aft_point // 20 + 1
-            return aft_point[0:2, :]
+    flag,r = Find_rec(img,1.35,1.45,8000)
+    if flag:
+        for p in r.corners():
+            rect_coord.append([p[0], p[1]])
+        rect_coord = matrix(rect_coord)
+        H = getPerspectMat(rect_coord, tar_ls)
+        if type(H) != matrix:
+            pass
+        for c in img.find_circles(roi=r.rect(), threshold=1500, x_margin=10, y_margin=10,
+                                  r_margin=10, r_min=2,
+                                  r_max=6, r_step=1):
+            if c.y() - r.y() > 5 and c.y() - r.y() - r.h() < -5:
+                pre_point.append([c[0], c[1], 1])
+        pre_point = matrix(pre_point)
+        aft_point = pre_point
+        aft_point = dot(H, pre_point.T)
+        for i in range(aft_point.n):
+            aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
+            aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
+        aft_point = aft_point // 20 + 1
+        return aft_point[0:2, :]
 
 def recognize(i):
     tep = []
@@ -727,20 +736,10 @@ def classify():
 
     while (True):
         img = sensor.snapshot().binary([(0, 100, -128, 127, -128, 0)])
-        for r in img.find_rects(threshold=20000):  # 在图像中搜索矩形
-            corners = list(r.corners())
-            x1, y1 = corners[0]
-            x2, y2 = corners[1]
-            len_x = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-            x1, y1 = corners[2]
-            len_y = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-            if len_y < 0.01:
-                continue
-            w_h = len_x / len_y
-            bbox_size = r.w() * r.h()
-            if w_h > 0.95 and w_h < 1.05 and bbox_size > 5000:
-                img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
-                img1 = img.copy(1, 1, r.rect())  # 拷贝矩形框内的图像
+        flag,r = Find_rec(img,0.95,1.05,3600)
+        if flag :
+            img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
+            img1 = sensor.snapshot().copy(1, 1, r.rect())  # 拷贝矩形框内的图像
                 # 将矩形框内的图像使用训练好的模型进行分类
                 # tf.classify()将在图像的roi上运行网络(如果没有指定roi，则在整个图像上运行)
                 # 将为每个位置生成一个分类得分输出向量。
@@ -752,58 +751,12 @@ def classify():
                 # 请注意，如果x_overlap和y_overlap较小，则在较小的比例下可以搜索更多区域...
 
                 # 默认设置只是进行一次检测...更改它们以搜索图像...
-                for obj in tf.classify(net, img1, min_scale=1.0, scale_mul=0.5, x_overlap=0.0, y_overlap=0.0):
-                    print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
-                    sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
-                    # 打印准确率最高的结果
-                    for i in range(1):
-                        print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
-        sensor.reset()
-    sensor.set_pixformat(sensor.RGB565)
-    sensor.set_framesize(sensor.QQVGA)  # we run out of memory if the resolution is much bigger...
-    sensor.set_brightness(2000)
-    sensor.skip_frames(time=20)
-    sensor.set_auto_gain(False)  # must turn this off to prevent image washout...
-    sensor.set_auto_whitebal(False, (0, 0x80, 0))  # must turn this off to prevent image washout...
-    net_path = "mymodel.tflite"  # 定义模型的路径
-    labels = [line.rstrip() for line in open("/sd/labels_animal_fruits.txt")]  # 加载标签
-    net = tf.load(net_path, load_to_fb=True)  # 加载模型
-    #(0, 100, -128, 127, -128, 0)蓝色
-    # 这个示例演示如何加载tflite模型并运行
-    # 这个示例演示如何加载tflite模型并运行
-    # 这个示例演示如何加载tflite模型并运行
-
-    while (True):
-        img = sensor.snapshot().binary([(0, 100, -128, 127, -128, 0)])
-        for r in img.find_rects(threshold=20000):  # 在图像中搜索矩形
-            corners = list(r.corners())
-            x1, y1 = corners[0]
-            x2, y2 = corners[1]
-            len_x = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-            x1, y1 = corners[2]
-            len_y = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
-            w_h = len_x / len_y
-            bbox_size = r.w() * r.h()
-            if w_h > 0.95 and w_h < 1.05 and bbox_size > 5000:
-                img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
-                img1 = img.copy(1, 1, r.rect())  # 拷贝矩形框内的图像
-                # 将矩形框内的图像使用训练好的模型进行分类
-                # tf.classify()将在图像的roi上运行网络(如果没有指定roi，则在整个图像上运行)
-                # 将为每个位置生成一个分类得分输出向量。
-                # 在每个比例下，检测窗口都以x_overlap（0-1）和y_overlap（0-1）为指导在ROI中移动。
-                # 如果将重叠设置为0.5，那么每个检测窗口将与前一个窗口重叠50%。
-                # 请注意，重叠越多，计算工作量就越大。因为每搜索/滑动一次都会运行一下模型。
-                # 最后，对于在网络沿x/y方向滑动后的多尺度匹配，检测窗口将由scale_mul（0-1）缩小到min_scale（0-1）。
-                # 下降到min_scale(0-1)。例如，如果scale_mul为0.5，则检测窗口将缩小50%。
-                # 请注意，如果x_overlap和y_overlap较小，则在较小的比例下可以搜索更多区域...
-
-                # 默认设置只是进行一次检测...更改它们以搜索图像...
-                for obj in tf.classify(net, img1, min_scale=1.0, scale_mul=0.5, x_overlap=0.0, y_overlap=0.0):
-                    print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
-                    sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
-                    # 打印准确率最高的结果
-                    for i in range(1):
-                        print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
+            for obj in tf.classify(net, img1):
+                print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
+                sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
+                # 打印准确率最高的结果
+                for i in range(1):
+                    print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
 #-----------------------------------------------#
 #-----------------------------------------------#
 #通信模块
