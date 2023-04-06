@@ -803,7 +803,7 @@ while(True):
     tep,flag = Read_line(uart,flag)
     if flag == 1:
         print(tep)
-        recognize()
+        point = recognize()
         flag = 0
     elif flag == 2:
         print(tep)
