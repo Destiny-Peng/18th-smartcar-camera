@@ -701,20 +701,22 @@ def map_recog(img,tar_ls):
                 aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
                 aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
             aft_point = aft_point // 20 + 1
-            return flag,aft_point[0:2, :]
-    return 0,None
+            return aft_point[0:2, :]
 
 def recognize():
     tep = []
-    img = sensor.snapshot()
-    flag,point = map_recog(img, tar)
-    if flag:
-        tep = point
+    while(True):
+        img = sensor.snapshot().lens_corr(1.55)
+        point = map_recog(img, tar)
+        if type(point) == matrix:
+            tep = point
+            break
     if DEBUG:
         tep = matrix(
             [[6.0, 20.0, 24.0, 8.0, 33.0, 5.0, 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0, 18.0, 14.0, 3.0, 25.0],
              [22.0, 20.0, 13.0, 9.0, 9.0, 6.0, 5.0, 4.0, 4.0, 22.0, 17.0, 17.0, 17.0, 14.0, 13.0, 10.0, 10.0, 9.0]])
     print("recognize")
+    print(tep)
     return tep
 #-----------------------------------------------#
 #-----------------------------------------------#
