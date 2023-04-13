@@ -798,10 +798,6 @@ def Read_line(uart,flag):
 
 
 #-----------------------------------------------#
-sensor.reset()
-sensor.set_pixformat(sensor.GRAYSCALE)
-sensor.set_framesize(sensor.QVGA)
-sensor.skip_frames(time = 2000)
 flag = 0
 times = 0
 point = []
