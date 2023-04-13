@@ -1,8 +1,7 @@
 from machine import UART
 from pyb import LED
 uart = UART(2, baudrate=115200)     # 初始化串口 波特率设置为115200 TX是B12 RX是B13
-import sensor, image, time
-import math
+import sensor, image, time, os, tf, math
 DEBUG = 1
 #--------------------umatrix---------------------------#
 import sys
@@ -678,38 +677,43 @@ def map_recog(img,tar_ls):
     #灰度图
     pre_point=[]
     rect_coord=[]
-    flag,r = Find_rec(img,1.35,1.45,8000)
+    flag,r = Find_rec(img,1.35,1.55,8000)
     if flag:
-        for p in r.corners():
-            rect_coord.append([p[0], p[1]])
-        rect_coord = matrix(rect_coord)
-        H = getPerspectMat(rect_coord, tar_ls)
-        if type(H) != matrix:
-            pass
-        for c in img.find_circles(roi=r.rect(), threshold=1500, x_margin=10, y_margin=10,
-                                  r_margin=10, r_min=2,
-                                  r_max=6, r_step=1):
-            if c.y() - r.y() > 5 and c.y() - r.y() - r.h() < -5:
-                pre_point.append([c[0], c[1], 1])
-        pre_point = matrix(pre_point)
-        aft_point = pre_point
-        aft_point = dot(H, pre_point.T)
-        for i in range(aft_point.n):
-            aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
-            aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
-        aft_point = aft_point // 20 + 1
-        return aft_point[0:2, :]
+        img1 = img.copy(roi=r.rect())
+        flag, rec = Find_rec(img1, 1.35, 1.55, 6000)
+        if not flag:
+            #找不到更小的矩形
+            for p in r.corners():
+                rect_coord.append([p[0], p[1]])
+            rect_coord = matrix(rect_coord)
+            H = getPerspectMat(rect_coord, tar_ls)
+            if type(H) != matrix:
+                pass
+            for c in img.find_circles(roi=r.rect(), threshold=1500, x_margin=10, y_margin=10,
+                                      r_margin=10, r_min=2,
+                                      r_max=6, r_step=1):
+                if c.y() - r.y() > 5 and c.y() - r.y() - r.h() < -5 and c.x() - r.x() > 5 and c.x() - r.x() - r.w() < -5:
+                    pre_point.append([c[0], c[1], 1])
+            pre_point = matrix(pre_point)
+            aft_point = pre_point
+            aft_point = dot(H, pre_point.T)
+            for i in range(aft_point.n):
+                aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
+                aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
+            aft_point = aft_point // 20 + 1
+            return flag,aft_point[0:2, :]
+    return 0,None
 
 def recognize():
     tep = []
+    img = sensor.snapshot()
+    flag,point = map_recog(img, tar)
+    if flag:
+        tep = point
     if DEBUG:
-        img = sensor.snapshot()
-        point = map_recog(img,tar)
-        if type(point) == matrix:
-            tep = point
-
-    tep = matrix([[6.0 , 20.0, 24.0, 8.0 , 33.0, 5.0 , 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0 , 18.0, 14.0, 3.0 , 25.0],
-     [22.0, 20.0, 13.0, 9.0 , 9.0 , 6.0 , 5.0 , 4.0 , 4.0 , 22.0, 17.0, 17.0, 17.0, 14.0, 13.0, 10.0, 10.0, 9.0 ]])
+        tep = matrix(
+            [[6.0, 20.0, 24.0, 8.0, 33.0, 5.0, 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0, 18.0, 14.0, 3.0, 25.0],
+             [22.0, 20.0, 13.0, 9.0, 9.0, 6.0, 5.0, 4.0, 4.0, 22.0, 17.0, 17.0, 17.0, 14.0, 13.0, 10.0, 10.0, 9.0]])
     print("recognize")
     return tep
 #-----------------------------------------------#
@@ -748,7 +752,8 @@ def classify():
             # 打印准确率最高的结果
             for i in range(1):
                 print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
-                return labels.index(sorted_list[i][0])
+                return flag,labels.index(sorted_list[i][0])
+    return 0,None
 
 #-----------------------------------------------#
 #-----------------------------------------------#
@@ -807,7 +812,9 @@ while(True):
         flag = 0
     elif flag == 2:
         print(tep)
-        cls = classify()
+        t1,t2 = classify()
+        if t1:
+            cls=t2
         flag = 0
     elif flag == 3:
         print(tep)
@@ -815,7 +822,7 @@ while(True):
         flag = 0
     elif flag == 4:
         print(tep)
-        Send_float(uart,cls)
+        Send_float(uart,float(cls))
         flag = 0
 
 
