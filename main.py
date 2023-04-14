@@ -704,41 +704,43 @@ def map_recog(img,tar_ls):
             return aft_point[0:2, :]
 
 def recognize():
-    tep = []
-    while(True):
+    flag = 0
+    if DEBUG:
+        point = matrix(
+            [[6.0, 20.0, 24.0, 8.0, 33.0, 5.0, 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0, 18.0, 14.0, 3.0, 25.0],
+             [22.0, 20.0, 13.0, 9.0, 9.0, 6.0, 5.0, 4.0, 4.0, 22.0, 17.0, 17.0, 17.0, 14.0, 13.0, 10.0, 10.0, 9.0]])
+        flag = 1
+        return flag, point
+    else:
         img = sensor.snapshot().lens_corr(1.55)
         point = map_recog(img, tar)
         if type(point) == matrix:
-            tep = point
-            break
-    if DEBUG:
-        tep = matrix(
-            [[6.0, 20.0, 24.0, 8.0, 33.0, 5.0, 28.0, 11.0, 18.0, 14.0, 14.0, 28.0, 10.0, 4.0, 18.0, 14.0, 3.0, 25.0],
-             [22.0, 20.0, 13.0, 9.0, 9.0, 6.0, 5.0, 4.0, 4.0, 22.0, 17.0, 17.0, 17.0, 14.0, 13.0, 10.0, 10.0, 9.0]])
-    print("recognize")
-    print(tep)
-    return tep
+            flag = 1
+        print("recognize")
+        print(point)
+        return flag, point
 #-----------------------------------------------#
 #-----------------------------------------------#
 #图像分类模块
 def classify():
-    sensor.reset()
-    sensor.set_pixformat(sensor.RGB565)
-    sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
-    sensor.set_brightness(2000)
-    sensor.skip_frames(time=20)
-    sensor.set_auto_gain(False)  # must turn this off to prevent image washout...
-    sensor.set_auto_whitebal(False, (0, 0x80, 0))  # must turn this off to prevent image washout...
-    while(True):
+    if DEBUG:
+        return 1,-1.0
+    else:
+        sensor.reset()
+        sensor.set_pixformat(sensor.RGB565)
+        sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
+        sensor.set_brightness(2000)
+        sensor.skip_frames(time=20)
+        sensor.set_auto_gain(False)  # must turn this off to prevent image washout...
+        sensor.set_auto_whitebal(False, (0, 0x80, 0))  # must turn this off to prevent image washout...
         img = sensor.snapshot().binary([(0, 100, -128, 127, -128, 0)])  # (0, 100, -128, 127, -128, 0)蓝色
         flag, r = Find_rec(img, 0.95, 1.05, 3600)
         if flag:
             img1 = sensor.snapshot().copy(roi=r.rect())
-            f, rec = Find_rec(img1, 0.95, 1.05, 1600)
-            if not f:
+            flag, rec = Find_rec(img1, 0.95, 1.05, 1600)
+            if not flag:
                 # 找不到更小的矩形
-                if DEBUG:
-                    img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
+                img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
                 # img1 = sensor.snapshot().copy(1, 1, r.rect())  # 拷贝矩形框内的图像
                 # 将矩形框内的图像使用训练好的模型进行分类
                 # tf.classify()将在图像的roi上运行网络(如果没有指定roi，则在整个图像上运行)
@@ -758,20 +760,17 @@ def classify():
                     print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
                     sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
                     # 打印准确率最高的结果
-                    if DEBUG:
-                        for i in range(1):
-                            print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
+                    for i in range(1):
+                        print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
                     return flag, labels.index(sorted_list[i][0])
+        else:
+            return 0,-1.0
 
 #-----------------------------------------------#
 #-----------------------------------------------#
 #通信模块
 import struct
 #struct将字节串解读为打包的二进制数据
-def Send_start(uart):
-    uart.write("m")
-def Send_end(uart):
-    uart.write("l")
 def Send_float(uart,bytes):
     uart.write(struct.pack("<f",bytes))
 #要在主循环中轮询。
@@ -812,14 +811,18 @@ while(True):
     tep,flag = Read_line(uart,flag)
     if flag == 1:
         print(tep)
-        point = recognize()
+        f = 0
+        while(f == 0):
+            f,point = recognize()
+        Send_float(uart, 100.0)
         flag = 0
     elif flag == 2:
         print(tep)
-        t1=0
-        t1,t2 = classify()
-        if t1:
-            cls=t2
+        f=0
+        while(f == 0):
+            f,t2 = classify()
+        cls=t2
+        Send_float(uart, 100.0)
         flag = 0
     elif flag == 3:
         print(tep)
