@@ -753,8 +753,8 @@ def classify():
                 # 请注意，如果x_overlap和y_overlap较小，则在较小的比例下可以搜索更多区域...
 
                 # 默认设置只是进行一次检测...更改它们以搜索图像...
-                net_path = "mymodel.tflite"  # 定义模型的路径
-                labels = [line.rstrip() for line in open("/sd/labels_animal_fruits.txt")]  # 加载标签
+                net_path = "160_994.tflite"  # 定义模型的路径
+                labels = [line.rstrip() for line in open("/sd/text.txt")]  # 加载标签
                 net = tf.load(net_path, load_to_fb=True)  # 加载模型
                 for obj in tf.classify(net, img1):
                     print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
