@@ -394,33 +394,6 @@ class matrix(object):
         return matrix([func(i, *args, **kwargs) for i in self.data],
                       cstride=self.cstride, rstride=self.rstride)
 
-def matrix_isclose(x, y, rtol=1E-05, atol=flt_eps):
-    ''' Returns a matrix indicating equal elements within tol'''
-    for i in range(x.size()):
-        try:
-            data = [abs(x.data[i] - y.data[i]) <= atol+rtol*abs(y.data[i]) for i in range(len(x.data))]
-        except (AttributeError, IndexError):
-            data = [False for i in range(len(x.data))]
-    return matrix(data, cstride=x.cstride, rstride=x.rstride, dtype=bool)
-
-
-def matrix_equal(x, y, tol=0):
-    ''' Matrix equality test with tolerance same shape'''
-    res = False
-    if type(y) == matrix:
-        if x.shape == y.shape:
-            res = all([abs(x.data[i] - y.data[i]) <= tol for i in range(x.size())])
-    return res
-
-
-def matrix_equiv(x, y):
-    ''' Returns a boolean indicating if X and Y share the same data and are broadcastable'''
-    res = False
-    if type(y) == matrix:
-        if x.size() == y.size():
-            res = all([x.data[i] == y.data[i] for i in range(len(x.data))])
-    return res
-
 def fp_eps():
     ''' Determine floating point resolution '''
     e = 1
@@ -573,11 +546,6 @@ def inverse_matrix(m):
     return aug[:,n:2*n]
 
 
-def pinv(X):
-    ''' Calculates the pseudo inverse Adagger = (A'A)^-1.A' '''
-    Xt = X.transpose()
-    d, Z = det_inv(dot(Xt, X))
-    return dot(Z, Xt)
 
 
 def dot(X, Y):
@@ -591,41 +559,6 @@ def dot(X, Y):
     else:
         raise ValueError('shapes not aligned')
 
-
-def cross(X, Y, axis=1):
-    ''' Cross product
-        axis=1 Numpy default
-        axis=0 MATLAB, Octave, SciLab default
-    '''
-    if axis == 0:
-        X = X.T
-        Y = Y.T
-    if (X.n in (2, 3)) and (Y.n in (2, 3)):
-        if X.m == Y.m:
-            Z = []
-            for k in range(min(X.m, Y.m)):
-                z = X[k, 0] * Y[k, 1] - X[k, 1] * Y[k, 0]
-                if (X.n == 3) and (Y.n == 3):
-                    Z.append([X[k, 1] * Y[k, 2] - X[k, 2] * Y[k, 1],
-                              X[k, 2] * Y[k, 0] - X[k, 0] * Y[k, 2], z])
-                else:
-                    Z.append([z])
-            if axis == 0:
-                return matrix(Z).T
-            else:
-                return matrix(Z)
-        else:
-            raise ValueError('shape mismatch')
-    else:
-        raise ValueError('incompatible dimensions for cross product'
-                         ' (must be 2 or 3)')
-
-def eps(x = 0):
-    # ref. numpy.spacing(), Octave/MATLAB eps() function
-    if x:
-        return 2**(math.floor(math.log(abs(x))/math.log(2)))*flt_eps
-    else:
-        return flt_eps
 
 #-----------------------------------------------#
 
@@ -726,21 +659,14 @@ def classify():
     if DEBUG:
         return 1,-1.0
     else:
-        sensor.reset()
-        sensor.set_pixformat(sensor.RGB565)
-        sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
-        sensor.set_brightness(2000)
-        sensor.skip_frames(time=20)
-        sensor.set_auto_gain(False)  # must turn this off to prevent image washout...
-        sensor.set_auto_whitebal(False, (0, 0x80, 0))  # must turn this off to prevent image washout...
-        img = sensor.snapshot().binary([(0, 100, -128, 127, -128, 0)])  # (0, 100, -128, 127, -128, 0)蓝色
-        flag, r = Find_rec(img, 0.95, 1.05, 3600)
+        img = sensor.snapshot()
+        flag, r = Find_rec(img, 0.9, 1.1, 2000)
         if flag:
-            img1 = sensor.snapshot().copy(roi=r.rect())
-            flag, rec = Find_rec(img1, 0.95, 1.05, 1600)
-            if not flag:
-                # 找不到更小的矩形
-                img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
+            img1 = img.copy(roi=r.rect())
+            flag, rec = Find_rec(img1, 0.9, 1.1, 1600)
+            if flag:
+                # 找到更小的矩形
+                #img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
                 # img1 = sensor.snapshot().copy(1, 1, r.rect())  # 拷贝矩形框内的图像
                 # 将矩形框内的图像使用训练好的模型进行分类
                 # tf.classify()将在图像的roi上运行网络(如果没有指定roi，则在整个图像上运行)
@@ -753,6 +679,18 @@ def classify():
                 # 请注意，如果x_overlap和y_overlap较小，则在较小的比例下可以搜索更多区域...
 
                 # 默认设置只是进行一次检测...更改它们以搜索图像...
+                net_path = "160_994.tflite"  # 定义模型的路径
+                labels = [line.rstrip() for line in open("/sd/text.txt")]  # 加载标签
+                net = tf.load(net_path, load_to_fb=True)  # 加载模型
+                for obj in tf.classify(net, img1.crop(roi = rec.rect())):
+                    print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
+                    sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
+                    # 打印准确率最高的结果
+                    for i in range(1):
+                        print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
+                    return flag, labels.index(sorted_list[i][0])
+            else:
+                #找不到更小的矩形
                 net_path = "160_994.tflite"  # 定义模型的路径
                 labels = [line.rstrip() for line in open("/sd/text.txt")]  # 加载标签
                 net = tf.load(net_path, load_to_fb=True)  # 加载模型
@@ -812,6 +750,11 @@ while(True):
     if flag == 1:
         print(tep)
         f = 0
+        sensor.reset()
+        sensor.set_pixformat(sensor.GRAYSCALE)
+        sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
+        sensor.set_brightness(1750)
+        sensor.skip_frames(time=20)
         while(f == 0):
             f,point = recognize()
         Send_float(uart, 100.0)
@@ -819,6 +762,11 @@ while(True):
     elif flag == 2:
         print(tep)
         f=0
+        sensor.reset()
+        sensor.set_pixformat(sensor.RGB565)
+        sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
+        sensor.set_brightness(1750)
+        sensor.skip_frames(time=100)
         while(f == 0):
             f,t2 = classify()
         cls=t2
