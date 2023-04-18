@@ -564,8 +564,10 @@ def dot(X, Y):
 
 #-----------------------------------------------#
 #找特定长宽比和大小的矩形
-def Find_rec(img,w_h_min,w_h_max,size_min,size_max=640*480):
-    for r in img.find_rects(threshold=8000):
+def Find_rec(img,w_h_min,w_h_max,size_min,size_max=640*480,Roi=None):
+    if Roi == None:
+        Roi = (0,0,img.width(),img.height())
+    for r in img.find_rects(threshold=8000,roi=Roi):
         #r是一个矩形对象，直接获得的w和h是bbox的属性，并不是矩形的,corners左下起逆时针
         corners = list(r.corners())
         x1,y1 = corners[0]
@@ -610,10 +612,9 @@ def map_recog(img,tar_ls):
     #灰度图
     pre_point=[]
     rect_coord=[]
-    flag,r = Find_rec(img,1.35,1.55,8000)
+    flag,r = Find_rec(img,1.35,1.5,8000)
     if flag:
-        img1 = img.copy(roi=r.rect())
-        flag, rec = Find_rec(img1, 1.35, 1.55, 6000)
+        flag,rec = Find_rec(img,1.35,1.5,6000,Roi = r.rect())
         if not flag:
             #找不到更小的矩形
             for p in r.corners():
