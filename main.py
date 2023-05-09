@@ -2,7 +2,7 @@ from machine import UART
 from pyb import LED
 uart = UART(2, baudrate=115200)     # 初始化串口 波特率设置为115200 TX是B12 RX是B13
 import sensor, image, time, os, tf, math, gc
-DEBUG = 1
+DEBUG = 0
 #--------------------umatrix---------------------------#
 import sys
 
@@ -439,6 +439,8 @@ def eye(m, dtype=ddtype):
         Z[i, i] = 1
     return Z
 
+
+
 def inverse_matrix(m):
     # 获取矩阵的大小
     n = len(m)
@@ -607,13 +609,12 @@ import struct
 def Send_float(uart,bytes):
     uart.write(struct.pack("<f",bytes))
 #要在主循环中轮询。
-def Send_loc(uart,point_ls:matrix,i):
-    if i < 2 * point_ls.n:
+def Send_loc(uart,point_ls:matrix):
+    for i in range(2 * point_ls.n):
         Send_float(uart, point_ls[i % 2, i // 2])
-        return i + 1
-    else:
-        Send_float(uart,100.0)
-        return 0
+        time.sleep_ms(5)
+    Send_float(uart,100.0)
+    return 0
 
 def Read_line(uart,flag):
     tep = uart.readline().decode().strip().split(",")
@@ -624,18 +625,14 @@ def Read_line(uart,flag):
         elif tep == ["C"]:
             #图片分类
             flag = 2
-        elif tep == ["T"]:
-            #发送坐标点
-            flag = 3
         else:
-            flag = 4
+            flag = 3
     return tep,flag
 
 
 
 #-----------------------------------------------#
 flag = 0
-times = 0
 point = []
 cls = -1
 net_path = "train160_04_27_19_26.tflite"  # 定义模型的路径
@@ -648,12 +645,12 @@ while(True):
         f = 0
         sensor.reset()
         sensor.set_pixformat(sensor.GRAYSCALE)
-        sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
+        sensor.set_framesize(sensor.QVGA)
         sensor.set_brightness(2000)
         sensor.skip_frames(time=20)
         while(f == 0):
             f,point = recognize()
-        Send_float(uart, 100.0)
+        Send_loc(uart,point)
         flag = 0
     elif flag == 2:
         print(tep)
@@ -668,10 +665,6 @@ while(True):
         Send_float(uart,float(cls))
         flag = 0
     elif flag == 3:
-        print(tep)
-        times = Send_loc(uart,point,times)
-        flag = 0
-    elif flag == 4:
         print(tep)
         Send_float(uart,200.0)
         flag = 0
