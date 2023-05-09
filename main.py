@@ -1,7 +1,7 @@
 from machine import UART
 from pyb import LED
 uart = UART(2, baudrate=115200)     # 初始化串口 波特率设置为115200 TX是B12 RX是B13
-import sensor, image, time, os, tf, math
+import sensor, image, time, os, tf, math, gc
 DEBUG = 1
 #--------------------umatrix---------------------------#
 import sys
@@ -439,81 +439,6 @@ def eye(m, dtype=ddtype):
         Z[i, i] = 1
     return Z
 
-def det_inv(x):
-    ''' Return (det(x) and inv(x))
-
-        Operates on a copy of x
-        Using elementary row operations convert X to an upper matrix
-        the product of the diagonal = det(X)
-        Continue to convert X to the identity matrix
-        All the operation carried out on the original identity matrix
-        makes it the inverse of X
-    '''
-    if not x.is_square:
-        raise ValueError('Matrix must be square')
-    else:
-        # divide each row element by [0] to give a one in the first position
-        # (may have to find a row to switch with if first element is 0)
-        x = x.copy()
-        inverse = eye(len(x), dtype=float)
-        sign = 1
-        factors = []
-        p = 0
-        while p < len(x):
-            d = x[p, p]
-            if abs(d) < flt_eps:
-                # pivot == 0 need to swap a row
-                # check if swap row also has a zero at the same position
-                np = 1
-                while (p + np) < len(x) and abs(x[p + np, p]) < flt_eps:
-                    np += 1
-                if (p + np) == len(x):
-                    # singular
-                    return [0, []]
-                # swap rows
-                z = x[p + np]
-                x[p + np, :] = x[p]
-                x[p, :] = z
-                # do identity
-                z = inverse[p + np]
-                inverse[p + np, :] = inverse[p]
-                inverse[p, :] = z
-                # change sign of det
-                sign = -sign
-                continue
-            factors.append(d)
-            # change target row
-            for n in range(p, len(x)):
-                x[p, n] = x[p, n] / d
-            # need to do the entire row for the inverse
-            for n in range(len(x)):
-                inverse[p, n] = inverse[p, n] / d
-            # eliminate position in the following rows
-            for i in range(p + 1, len(x)):
-                # multiplier is that column entry
-                t = x[i, p]
-                for j in range(p, len(x)):
-                    x[i, j] = x[i, j] - (t * x[p, j])
-                for j in range(len(x)):
-                    inverse[i, j] = inverse[i, j] - (t * inverse[p, j])
-            p = p + 1
-        s = sign
-        for i in factors:
-            s = s * i  # determinant
-        # travel through the rows eliminating upper diagonal non-zero values
-        for i in range(len(x) - 1):
-            # final row should already be all zeros
-            # except for the final position
-            for p in range(i + 1, len(x)):
-                # multiplier is that column entry
-                t = x[i, p]
-                for j in range(i + 1, len(x)):
-                    x[i, j] = x[i, j] - (t * x[p, j])
-                for j in range(len(x)):
-                    inverse[i, j] = inverse[i, j] - (t * inverse[p, j])
-        return (s, inverse)
-
-
 def inverse_matrix(m):
     # 获取矩阵的大小
     n = len(m)
@@ -545,9 +470,6 @@ def inverse_matrix(m):
     # 返回右半部分作为逆矩阵
     return aug[:,n:2*n]
 
-
-
-
 def dot(X, Y):
     ''' Dot product '''
     if X.size(2) == Y.size(1):
@@ -564,10 +486,8 @@ def dot(X, Y):
 
 #-----------------------------------------------#
 #找特定长宽比和大小的矩形
-def Find_rec(img,w_h_min,w_h_max,size_min,size_max=640*480,Roi=None):
-    if Roi == None:
-        Roi = (0,0,img.width(),img.height())
-    for r in img.find_rects(threshold=8000,roi=Roi):
+def Find_rec(img,w_h_min,w_h_max,size_min,size_max=640*480):
+    for r in img.find_rects(threshold=8000):
         #r是一个矩形对象，直接获得的w和h是bbox的属性，并不是矩形的,corners左下起逆时针
         corners = list(r.corners())
         x1,y1 = corners[0]
@@ -578,7 +498,7 @@ def Find_rec(img,w_h_min,w_h_max,size_min,size_max=640*480,Roi=None):
         if len_y < 0.01:
             continue
         w_h = len_x/len_y
-        bbox_size = r.w()*r.h()
+        bbox_size = len_x*len_y
         if w_h >w_h_min and w_h <w_h_max and bbox_size > size_min and bbox_size < size_max:
             return 1,r
     return 0,None
@@ -596,11 +516,7 @@ def getPerspectMat(ls ,tar_ls):
                tar_ls[i,1]])
     pre_trans = matrix(pre_trans).reshape([8,8])
     #check if the pre_trans inversible
-    det,x = det_inv(pre_trans)
-    if det < flt_eps or det > 1.19E7:
-        y = inverse_matrix(pre_trans*10)*10
-    else:
-        y = inverse_matrix(pre_trans)
+    y = inverse_matrix(pre_trans*10)*10
     aft_trans = matrix(aft_trans).reshape([8,1])
     tep = dot(y,aft_trans)
     for i in range(8):
@@ -612,30 +528,29 @@ def map_recog(img,tar_ls):
     #灰度图
     pre_point=[]
     rect_coord=[]
-    flag,r = Find_rec(img,1.35,1.5,8000)
+    flag,r = Find_rec(img,1.35,1.55,20000,41500)
     if flag:
-        flag,rec = Find_rec(img,1.35,1.5,6000,Roi = r.rect())
-        if not flag:
-            #找不到更小的矩形
-            for p in r.corners():
-                rect_coord.append([p[0], p[1]])
-            rect_coord = matrix(rect_coord)
-            H = getPerspectMat(rect_coord, tar_ls)
-            if type(H) != matrix:
-                pass
-            for c in img.find_circles(roi=r.rect(), threshold=1500, x_margin=10, y_margin=10,
-                                      r_margin=10, r_min=2,
-                                      r_max=6, r_step=1):
-                if c.y() - r.y() > 5 and c.y() - r.y() - r.h() < -5 and c.x() - r.x() > 5 and c.x() - r.x() - r.w() < -5:
-                    pre_point.append([c[0], c[1], 1])
-            pre_point = matrix(pre_point)
-            aft_point = pre_point
-            aft_point = dot(H, pre_point.T)
-            for i in range(aft_point.n):
-                aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
-                aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
-            aft_point = aft_point // 20 + 1
-            return aft_point[0:2, :]
+        img.draw_rectangle(r.rect(),thickness=8)
+        for p in r.corners():
+            rect_coord.append([p[0], p[1]])
+        rect_coord = matrix(rect_coord)
+        H = getPerspectMat(rect_coord, tar_ls)
+        if type(H) != matrix:
+            pass
+        for c in img.find_circles(roi=r.rect(), threshold=2000, x_margin=10, y_margin=10,
+                                 r_margin=10, r_min=3,
+                                  r_max=6, r_step=1):
+            if c.y() - r.y() > 8 and c.y() - r.y() - r.h() < -8 and c.x() - r.x() > 8 and c.x() - r.x() - r.w() < -8:
+                img.draw_circle(c[0], c[1], 2, color = (0, 0, 255))
+                pre_point.append([c[0], c[1], 1])
+        pre_point = matrix(pre_point)
+        aft_point = pre_point
+        aft_point = dot(H, pre_point.T)
+        for i in range(aft_point.n):
+            aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
+            aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
+        aft_point = aft_point // 20 + 1
+        return aft_point[0:2, :]
 
 def recognize():
     flag = 0
@@ -646,7 +561,7 @@ def recognize():
         flag = 1
         return flag, point
     else:
-        img = sensor.snapshot().lens_corr(1.55)
+        img = sensor.snapshot().lens_corr(strength = 1.65)
         point = map_recog(img, tar)
         if type(point) == matrix:
             flag = 1
@@ -656,52 +571,31 @@ def recognize():
 #-----------------------------------------------#
 #-----------------------------------------------#
 #图像分类模块
-def classify():
+def classify(net,labels):
     if DEBUG:
         return 1,-1.0
     else:
-        img = sensor.snapshot()
-        flag, r = Find_rec(img, 0.9, 1.1, 2000)
+        tep = []
+        max_n = 0
+        cls = -1
+        img = sensor.snapshot().lens_corr(1.3)
+        img1 = img.copy()
+        flag, r = Find_rec(img1.binary([(0, 69, -128, 127, -128, -28)]), 0.9, 1.25, 8000)
         if flag:
-            img1 = img.copy(roi=r.rect())
-            flag, rec = Find_rec(img1, 0.9, 1.1, 1600)
-            if flag:
-                # 找到更小的矩形
-                #img.draw_rectangle(r.rect(), color=(255, 0, 0))  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
-                # img1 = sensor.snapshot().copy(1, 1, r.rect())  # 拷贝矩形框内的图像
-                # 将矩形框内的图像使用训练好的模型进行分类
-                # tf.classify()将在图像的roi上运行网络(如果没有指定roi，则在整个图像上运行)
-                # 将为每个位置生成一个分类得分输出向量。
-                # 在每个比例下，检测窗口都以x_overlap（0-1）和y_overlap（0-1）为指导在ROI中移动。
-                # 如果将重叠设置为0.5，那么每个检测窗口将与前一个窗口重叠50%。
-                # 请注意，重叠越多，计算工作量就越大。因为每搜索/滑动一次都会运行一下模型。
-                # 最后，对于在网络沿x/y方向滑动后的多尺度匹配，检测窗口将由scale_mul（0-1）缩小到min_scale（0-1）。
-                # 下降到min_scale(0-1)。例如，如果scale_mul为0.5，则检测窗口将缩小50%。
-                # 请注意，如果x_overlap和y_overlap较小，则在较小的比例下可以搜索更多区域...
-
-                # 默认设置只是进行一次检测...更改它们以搜索图像...
-                net_path = "160_994.tflite"  # 定义模型的路径
-                labels = [line.rstrip() for line in open("/sd/text.txt")]  # 加载标签
-                net = tf.load(net_path, load_to_fb=True)  # 加载模型
-                for obj in tf.classify(net, img1.crop(roi = rec.rect())):
-                    print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
-                    sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
-                    # 打印准确率最高的结果
-                    for i in range(1):
-                        print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
-                    return flag, labels.index(sorted_list[i][0])
-            else:
-                #找不到更小的矩形
-                net_path = "160_994.tflite"  # 定义模型的路径
-                labels = [line.rstrip() for line in open("/sd/text.txt")]  # 加载标签
-                net = tf.load(net_path, load_to_fb=True)  # 加载模型
-                for obj in tf.classify(net, img1):
-                    print("**********\nTop 1 Detections at [x=%d,y=%d,w=%d,h=%d]" % obj.rect())
-                    sorted_list = sorted(zip(labels, obj.output()), key=lambda x: x[1], reverse=True)
-                    # 打印准确率最高的结果
-                    for i in range(1):
-                        print("%s = %f" % (sorted_list[i][0], sorted_list[i][1]))
-                    return flag, labels.index(sorted_list[i][0])
+            rotation = 0
+            img.draw_rectangle(r.rect(), color=(0, 0, 0), thickness=8)  # 绘制矩形外框，便于在IDE上查看识别到的矩形位置
+            img.rotation_corr(corners = r.corners())
+            for i in range(4):
+                img.rotation_corr(z_rotation=rotation)  # .copy(cp_to_fb = True)
+                for obj in tf.classify(net, img):
+                    tep = obj.output()
+                    x, y = sorted(zip(labels, tep), key=lambda x: x[1], reverse=True)[0]
+                    if max_n < y:
+                        max_n = y
+                        cls = labels.index(x)
+                rotation = rotation + 90
+            print("%s = %f" % (labels[cls], max_n))
+            return 1,cls
         else:
             return 0,-1.0
 
@@ -733,11 +627,9 @@ def Read_line(uart,flag):
         elif tep == ["T"]:
             #发送坐标点
             flag = 3
-        elif tep == ["S"]:
-            #发送图片识别结果
+        else:
             flag = 4
     return tep,flag
-
 
 
 
@@ -746,6 +638,9 @@ flag = 0
 times = 0
 point = []
 cls = -1
+net_path = "train160_04_27_19_26.tflite"  # 定义模型的路径
+labels = [line.rstrip() for line in open("/sd/text.txt")]  # 加载标签
+net = tf.load(net_path, load_to_fb=True)  # 加载模型
 while(True):
     tep,flag = Read_line(uart,flag)
     if flag == 1:
@@ -754,7 +649,7 @@ while(True):
         sensor.reset()
         sensor.set_pixformat(sensor.GRAYSCALE)
         sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
-        sensor.set_brightness(1750)
+        sensor.set_brightness(2000)
         sensor.skip_frames(time=20)
         while(f == 0):
             f,point = recognize()
@@ -765,13 +660,12 @@ while(True):
         f=0
         sensor.reset()
         sensor.set_pixformat(sensor.RGB565)
-        sensor.set_framesize(sensor.QVGA)  # we run out of memory if the resolution is much bigger...
-        sensor.set_brightness(1750)
-        sensor.skip_frames(time=100)
+        sensor.set_framesize(sensor.QVGA)
+        sensor.set_brightness(1000)
+        sensor.skip_frames(time=20)
         while(f == 0):
-            f,t2 = classify()
-        cls=t2
-        Send_float(uart, 100.0)
+            f,cls= classify(net,labels)
+        Send_float(uart,float(cls))
         flag = 0
     elif flag == 3:
         print(tep)
@@ -779,9 +673,8 @@ while(True):
         flag = 0
     elif flag == 4:
         print(tep)
-        Send_float(uart,float(cls))
+        Send_float(uart,200.0)
         flag = 0
-
 
 
 
