@@ -654,7 +654,7 @@ while(True):
         sensor.set_pixformat(sensor.GRAYSCALE)
         sensor.set_framesize(sensor.QVGA)
         sensor.set_brightness(2000)
-        sensor.skip_frames(time=20)
+        sensor.skip_frames(time=200)
         while(f == 0):
             f,point = recognize()
         Send_loc(uart,point)
@@ -666,7 +666,7 @@ while(True):
         sensor.set_pixformat(sensor.RGB565)
         sensor.set_framesize(sensor.QVGA)
         sensor.set_brightness(1000)
-        sensor.skip_frames(time=20)
+        sensor.skip_frames(time=200)
         while(f == 0):
             f,cls= classify(net,labels)
         Send_float(uart,float(cls))
