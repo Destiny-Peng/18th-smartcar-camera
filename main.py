@@ -539,7 +539,7 @@ def map_recog(img,tar_ls):
                                  r_margin=10, r_min=3,
                                   r_max=6, r_step=1):
             if c.y() - r.y() > 5 and c.y() - r.y() - r.h() < -5 and c.x() - r.x() > 5 and c.x() - r.x() - r.w() < -5:
-                img.draw_circle(c[0], c[1], 2, color = (0, 0, 255))
+                img.draw_circle(c[0], c[1],4,thickness = 5)
                 pre_point.append([c[0], c[1], 1])
         pre_point = matrix(pre_point)
         aft_point = dot(H, pre_point.transpose())
@@ -562,7 +562,7 @@ def recognize():
         point = map_recog(img, tar)
         if type(point) == matrix:
             flag = 1
-        print("recognize")
+        # print("recognize")
         print(point)
         return flag, point
 #-----------------------------------------------#
@@ -623,13 +623,13 @@ def Send_loc(uart,point_ls:matrix):
     Send_float(uart,100.0)
     return 0
 
-def Read_line(uart,flag):
-    tep = uart.readline().decode().strip().split(",")
-    if tep != [""] :
-        if tep == ["M"]:
+def Read(uart,flag):
+    tep = uart.read().decode()
+    if tep != "" :
+        if tep == "M":
             #A4坐标
             flag = 1
-        elif tep == ["C"]:
+        elif tep == "C":
             #图片分类
             flag = 2
         else:
@@ -646,7 +646,7 @@ net_path = "train160_04_27_19_26.tflite"  # 定义模型的路径
 labels = [line.rstrip() for line in open("/sd/text.txt")]  # 加载标签
 net = tf.load(net_path, load_to_fb=True)  # 加载模型
 while(True):
-    tep,flag = Read_line(uart,flag)
+    tep,flag = Read(uart,flag)
     if flag == 1:
         print(tep)
         f = 0
