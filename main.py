@@ -367,10 +367,6 @@ class matrix(object):
         X.shape = nshape
         return X
 
-    @property
-    def T(self):
-        return self.transpose()
-
     def transpose(self):
         """ Return a view """
         X = matrix(self.data, cstride=self.rstride, rstride=self.cstride)
@@ -539,15 +535,14 @@ def map_recog(img,tar_ls):
         H = getPerspectMat(rect_coord, tar_ls)
         if type(H) != matrix:
             pass
-        for c in img.find_circles(roi=r.rect(), threshold=2000, x_margin=10, y_margin=10,
+        for c in img.find_circles(roi=r.rect(), threshold=1800, x_margin=10, y_margin=10,
                                  r_margin=10, r_min=3,
                                   r_max=6, r_step=1):
-            if c.y() - r.y() > 8 and c.y() - r.y() - r.h() < -8 and c.x() - r.x() > 8 and c.x() - r.x() - r.w() < -8:
+            if c.y() - r.y() > 5 and c.y() - r.y() - r.h() < -5 and c.x() - r.x() > 5 and c.x() - r.x() - r.w() < -5:
                 img.draw_circle(c[0], c[1], 2, color = (0, 0, 255))
                 pre_point.append([c[0], c[1], 1])
         pre_point = matrix(pre_point)
-        aft_point = pre_point
-        aft_point = dot(H, pre_point.T)
+        aft_point = dot(H, pre_point.transpose())
         for i in range(aft_point.n):
             aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
             aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
@@ -597,10 +592,22 @@ def classify(net,labels):
                         cls = labels.index(x)
                 rotation = rotation + 90
             print("%s = %f" % (labels[cls], max_n))
-            return 1,cls
-        else:
-            return 0,-1.0
-
+            '''
+            word_dict = {0: '水果_榴莲', 1: '水果_橙子', 2: '水果_苹果', 3: '水果_葡萄', 4: '水果_香蕉',
+                 5: '粮食_水稻', 6: '粮食_玉米', 7: '粮食_番薯', 8: '粮食_花生', 9: '粮食_蚕豆',
+                 10: '蔬菜_白菜', 11: '蔬菜_茄子', 12: '蔬菜_萝卜', 13: '蔬菜_辣椒', 14: '蔬菜_黄瓜'}
+            '''
+            if cls == 0 or cls == 7 or cls == 14:
+                direction = 0
+            elif cls == 1 or cls == 9 or cls == 10:
+                direction = 1
+            elif cls == 2 or cls == 8 or cls == 13:
+                direction = 2
+            elif cls == 4 or cls == 5 or cls == 12:
+                direction = 3
+            elif cls == 3 or cls == 6 or cls == 11:
+                direction = 4
+            return 1,direction
 #-----------------------------------------------#
 #-----------------------------------------------#
 #通信模块
