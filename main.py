@@ -547,6 +547,7 @@ def map_recog(img,tar_ls):
             aft_point[0, i] = aft_point[0, i] * 5 / aft_point[2, i]
             aft_point[1, i] = aft_point[1, i] * 5 / aft_point[2, i]
         aft_point = aft_point // 20 + 1
+        aft_point = (aft_point - 1) * 0.2
         return aft_point[0:2, :]
 
 def recognize():
@@ -675,6 +676,3 @@ while(True):
         print(tep)
         Send_float(uart,200.0)
         flag = 0
-
-
-
